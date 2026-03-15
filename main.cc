@@ -1,79 +1,94 @@
 #include <opencv2/opencv.hpp>
 #include <deque>
-#include <iostream>
-#include <string>
+#include <chrono>
 #include <ctime>
+#include <iomanip>
+#include <sstream>
+
+using namespace cv;
+using namespace std;
+
+// Helper to generate unique filenames
+string getTimestampName() {
+    auto now = chrono::system_clock::now();
+    auto in_time_t = chrono::system_clock::to_time_t(now);
+    stringstream ss;
+    ss << "bird_" << put_time(localtime(&in_time_t), "%Y%m%d_%H%M%S") << ".avi";
+    return ss.str();
+}
 
 int main() {
-    // 1. HARDWARE SYNC
-    cv::VideoCapture cap(0); // Force V4L2 driver for better Pi support
+    VideoCapture cap(0);
     if (!cap.isOpened()) return -1;
 
-    // Set resolution to a balanced 720p - high quality but manageable
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
-    
-    double fps = cap.get(cv::CAP_PROP_FPS);
-    if (fps < 1 || fps > 100) fps = 30.0; // Fallback
+    // PS3 Eye Specific Settings (640x480 @ 60fps is the sweet spot)
+    int width = 640;
+    int height = 480;
+    int fps = 60; 
 
-    // 2. QUALITY SETTINGS
-    // We use a GStreamer pipeline for Hardware Encoding (H.264)
-    // This is the "secret sauce" for smooth, high-quality Pi video.
-    auto getWriterPipeline = [&](std::string filename, int f) {
-        return "appsrc ! videoconvert ! v4l2h264enc extra-controls=\"controls,video_bitrate=5000000;\" ! " 
-               "h264parse ! mp4mux ! filesink location=" + filename;
-    };
+    cap.set(CAP_PROP_FRAME_WIDTH, width);
+    cap.set(CAP_PROP_FRAME_HEIGHT, height);
+    cap.set(CAP_PROP_FPS, fps);
 
-    cv::Ptr<cv::BackgroundSubtractorMOG2> pBackSub = cv::createBackgroundSubtractorMOG2(300, 32, false);
-    cv::VideoWriter writer;
-    std::deque<cv::Mat> buffer;
+    int bufferSize = 5; 
+    int postMotionDelay = 5;
     
-    cv::Mat frame, fgMask, smallFrame;
+    deque<Mat> frameBuffer;
+    VideoWriter writer;
     bool isRecording = false;
     int framesSinceMotion = 0;
-    int postRollLimit = (int)fps * 5;
+
+    Ptr<BackgroundSubtractor> pBackSub = createBackgroundSubtractorMOG2(500, 25, false);
+
+    cout << "Headless Monitoring Started... Press Ctrl+C to stop." << endl;
 
     while (true) {
+        Mat frame, fgMask;
         if (!cap.read(frame)) break;
 
-        // ANALYSIS (Every 4th frame to keep CPU cool)
-        static int count = 0;
-        bool motionDetected = false;
-        if (count++ % 4 == 0) {
-            cv::resize(frame, smallFrame, cv::Size(320, 180));
-            pBackSub->apply(smallFrame, fgMask);
-            motionDetected = (cv::countNonZero(fgMask) > (smallFrame.total() * 0.005));
+        // 1. Motion Detection (Using a downsized mask for speed)
+        Mat smallFrame;
+        resize(frame, smallFrame, Size(320, 240)); 
+        pBackSub->apply(smallFrame, fgMask);
+        
+        // Count pixels that changed
+        int motionCount = countNonZero(fgMask);
+
+        // 2. Buffer Management
+        frameBuffer.push_back(frame.clone());
+        if (frameBuffer.size() > bufferSize) {
+            frameBuffer.pop_front();
         }
 
-        if (motionDetected) {
+        // 3. Logic: Start Recording
+        if (motionCount > 400) { // Adjust sensitivity here
             framesSinceMotion = 0;
             if (!isRecording) {
-                std::string fn = "bird_" + std::to_string(time(0)) + ".mp4";
-                // Open using the Hardware Pipeline
-                writer.open(getWriterPipeline(fn, (int)fps), 0, fps, frame.size(), true);
-                isRecording = true;
-                while (!buffer.empty()) {
-                    writer.write(buffer.front());
-                    buffer.pop_front();
+                string filename = getTimestampName();
+                cout << "Motion! Saving to: " << filename << endl;
+                writer.open(filename, VideoWriter::fourcc('X', '2', '6', '4'), fps, frame.size());
+                
+                while (!frameBuffer.empty()) {
+                    writer.write(frameBuffer.front());
+                    frameBuffer.pop_front();
                 }
+                isRecording = true;
             }
         } else {
             framesSinceMotion++;
         }
 
+        // 4. Logic: Continue/Stop Recording
         if (isRecording) {
             writer.write(frame);
-            if (framesSinceMotion > postRollLimit) {
+            if (framesSinceMotion > postMotionDelay) {
+                cout << "Activity ended. File closed." << endl;
                 isRecording = false;
                 writer.release();
             }
-        } else {
-            // Memory efficient buffering: only store if we have to
-            buffer.push_back(frame.clone());
-            if (buffer.size() > (int)fps * 2) buffer.pop_front();
         }
-
-        if (cv::waitKey(1) == 27) break;
+        
+        // Note: No imshow() or waitKey() here for headless operation.
     }
     return 0;
 }
