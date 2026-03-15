@@ -1,0 +1,3 @@
+/home/octavi/projects/cam/build/CMakeFiles/OpenCVTest.dir
+/home/octavi/projects/cam/build/CMakeFiles/edit_cache.dir
+/home/octavi/projects/cam/build/CMakeFiles/rebuild_cache.dir
