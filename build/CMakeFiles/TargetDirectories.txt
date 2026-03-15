@@ -1,3 +1,0 @@
-/home/octavi/projects/bird-feeder/build/CMakeFiles/OpenCVTest.dir
-/home/octavi/projects/bird-feeder/build/CMakeFiles/edit_cache.dir
-/home/octavi/projects/bird-feeder/build/CMakeFiles/rebuild_cache.dir
