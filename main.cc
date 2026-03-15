@@ -13,7 +13,7 @@ string getTimestampName() {
     auto now = chrono::system_clock::now();
     auto in_time_t = chrono::system_clock::to_time_t(now);
     stringstream ss;
-    ss << "bird_" << put_time(localtime(&in_time_t), "%Y%m%d_%H%M%S") << ".avi";
+    ss << "videos/bird_" << put_time(localtime(&in_time_t), "%Y%m%d_%H%M%S") << ".avi";
     return ss.str();
 }
 
