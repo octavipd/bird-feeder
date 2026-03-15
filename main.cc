@@ -4,117 +4,76 @@
 #include <string>
 #include <ctime>
 
-std::string getFilename()
-{
-        time_t now = time(0);
-        struct tm tstruct = *localtime(&now);
-        char buf[80];
-        strftime(buf, sizeof(buf), "videos/bird_%Y%m%d_%H%M%S.mp4", &tstruct);
-        return std::string(buf);
-}
+int main() {
+    // 1. HARDWARE SYNC
+    cv::VideoCapture cap(0, cv::CAP_V4L2); // Force V4L2 driver for better Pi support
+    if (!cap.isOpened()) return -1;
 
-int main()
-{
-        cv::VideoCapture cap(0);
-        if (!cap.isOpened())
-                return -1;
+    // Set resolution to a balanced 720p - high quality but manageable
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+    
+    double fps = cap.get(cv::CAP_PROP_FPS);
+    if (fps < 1 || fps > 100) fps = 30.0; // Fallback
 
-        // 1. DYNAMIC FPS DETECTION
-        // Get hardware FPS (usually 30). Fallback to 30 if driver returns 0.
-        double hwFPS = cap.get(cv::CAP_PROP_FPS);
-        if (hwFPS < 1)
-                hwFPS = 30.0;
+    // 2. QUALITY SETTINGS
+    // We use a GStreamer pipeline for Hardware Encoding (H.264)
+    // This is the "secret sauce" for smooth, high-quality Pi video.
+    auto getWriterPipeline = [&](std::string filename, int f) {
+        return "appsrc ! videoconvert ! v4l2h264enc extra-controls=\"controls,video_bitrate=5000000;\" ! " 
+               "h264parse ! mp4mux ! filesink location=" + filename;
+    };
 
-        int fps = (int)hwFPS;
-        int preRollSecs = 2;
-        int postRollSecs = 3;
+    cv::Ptr<cv::BackgroundSubtractorMOG2> pBackSub = cv::createBackgroundSubtractorMOG2(300, 32, false);
+    cv::VideoWriter writer;
+    std::deque<cv::Mat> buffer;
+    
+    cv::Mat frame, fgMask, smallFrame;
+    bool isRecording = false;
+    int framesSinceMotion = 0;
+    int postRollLimit = (int)fps * 5;
 
-        size_t maxBufferFrames = fps * preRollSecs;
-        int postRollLimit = fps * postRollSecs;
+    while (true) {
+        if (!cap.read(frame)) break;
 
-        // 2. RESOURCE OPTIMIZATIONS
-        int analysisFrequency = 5; // Only run motion logic every 5th frame
-        int frameCounter = 0;
-
-        cv::Ptr<cv::BackgroundSubtractorMOG2> pBackSub = cv::createBackgroundSubtractorMOG2(500, 16, false);
-        cv::VideoWriter writer;
-        std::deque<cv::Mat> buffer;
-
-        cv::Mat frame, fgMask, smallFrame;
-        bool isRecording = false;
-        int framesSinceMotion = 0;
+        // ANALYSIS (Every 4th frame to keep CPU cool)
+        static int count = 0;
         bool motionDetected = false;
-
-        std::cout << "Monitoring at " << fps << " FPS. Analysis every " << analysisFrequency << " frames." << std::endl;
-
-        while (true)
-        {
-                if (!cap.read(frame))
-                        break;
-                frameCounter++;
-
-                // --- STEP A: LIGHTWEIGHT MOTION LOGIC ---
-                // We only "think" every 5 frames, but we "see" every frame
-                if (frameCounter % analysisFrequency == 0)
-                {
-                        cv::resize(frame, smallFrame, cv::Size(320, 240)); // Low-res analysis
-                        pBackSub->apply(smallFrame, fgMask);
-                        cv::threshold(fgMask, fgMask, 200, 255, cv::THRESH_BINARY);
-
-                        double motionAmount = (double)cv::countNonZero(fgMask) / fgMask.total();
-                        motionDetected = (motionAmount > 0.01);
-                }
-
-                // --- STEP B: BUFFER & STATE MACHINE ---
-                if (motionDetected)
-                {
-                        if(framesSinceMotion != 0)
-                        {
-                                std::cout << "Detected motion\n";
-                        }
-                        framesSinceMotion = 0;
-                        if (!isRecording)
-                        {
-                                std::string filename = getFilename();
-                                // Match the VideoWriter FPS to the actual Hardware FPS
-                                writer.open(filename, cv::VideoWriter::fourcc('a', 'v', 'c', '1'), fps, frame.size());
-                                isRecording = true;
-
-                                while (!buffer.empty())
-                                {
-                                        writer.write(buffer.front());
-                                        buffer.pop_front();
-                                }
-                        }
-                }
-                else
-                {
-                        framesSinceMotion++;
-                }
-
-                // --- STEP C: DISK I/O ---
-                if (isRecording)
-                {
-                        writer.write(frame);
-                        if (framesSinceMotion > postRollLimit)
-                        {
-                                isRecording = false;
-                                writer.release();
-                                std::cout << "Saved: " << getFilename() << std::endl;
-                        }
-                }
-                else
-                {
-                        // Only buffer if we aren't already recording
-                        buffer.push_back(frame.clone());
-                        if (buffer.size() > maxBufferFrames)
-                                buffer.pop_front();
-                }
-
-                // Minimal wait to keep the loop timing consistent
-                if (cv::waitKey(1) == 27)
-                        break;
+        if (count++ % 4 == 0) {
+            cv::resize(frame, smallFrame, cv::Size(320, 180));
+            pBackSub->apply(smallFrame, fgMask);
+            motionDetected = (cv::countNonZero(fgMask) > (smallFrame.total() * 0.005));
         }
 
-        return 0;
+        if (motionDetected) {
+            framesSinceMotion = 0;
+            if (!isRecording) {
+                std::string fn = "bird_" + std::to_string(time(0)) + ".mp4";
+                // Open using the Hardware Pipeline
+                writer.open(getWriterPipeline(fn, (int)fps), 0, fps, frame.size(), true);
+                isRecording = true;
+                while (!buffer.empty()) {
+                    writer.write(buffer.front());
+                    buffer.pop_front();
+                }
+            }
+        } else {
+            framesSinceMotion++;
+        }
+
+        if (isRecording) {
+            writer.write(frame);
+            if (framesSinceMotion > postRollLimit) {
+                isRecording = false;
+                writer.release();
+            }
+        } else {
+            // Memory efficient buffering: only store if we have to
+            buffer.push_back(frame.clone());
+            if (buffer.size() > (int)fps * 2) buffer.pop_front();
+        }
+
+        if (cv::waitKey(1) == 27) break;
+    }
+    return 0;
 }
