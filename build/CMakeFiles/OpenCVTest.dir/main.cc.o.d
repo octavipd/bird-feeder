@@ -1,5 +1,6 @@
-CMakeFiles/OpenCVTest.dir/main.cc.o: /home/octavi/projects/cam/main.cc \
- /usr/include/stdc-predef.h /usr/include/opencv4/opencv2/opencv.hpp \
+CMakeFiles/OpenCVTest.dir/main.cc.o: \
+ /home/octavi/projects/bird-feeder/main.cc /usr/include/stdc-predef.h \
+ /usr/include/opencv4/opencv2/opencv.hpp \
  /usr/include/opencv4/opencv2/opencv_modules.hpp \
  /usr/include/opencv4/opencv2/core.hpp \
  /usr/include/opencv4/opencv2/core/cvdef.h \

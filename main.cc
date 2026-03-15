@@ -93,7 +93,7 @@ int main() {
         }
 
         // Optional: Show feed
-        cv::imshow("BirdCam Feed", frame);
+        //cv::imshow("BirdCam Feed", frame);
         if (cv::waitKey(1000/fps) == 27) break;
     }
 

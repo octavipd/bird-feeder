@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/home/octavi/projects/cam/main.cc" "CMakeFiles/OpenCVTest.dir/main.cc.o" "gcc" "CMakeFiles/OpenCVTest.dir/main.cc.o.d"
+  "/home/octavi/projects/bird-feeder/main.cc" "CMakeFiles/OpenCVTest.dir/main.cc.o" "gcc" "CMakeFiles/OpenCVTest.dir/main.cc.o.d"
   "" "OpenCVTest" "gcc" "CMakeFiles/OpenCVTest.dir/link.d"
   )
 

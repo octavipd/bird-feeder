@@ -7,7 +7,7 @@ set(CMAKE_DEPENDS_GENERATOR "Unix Makefiles")
 # The top level Makefile was generated from the following files:
 set(CMAKE_MAKEFILE_DEPENDS
   "CMakeCache.txt"
-  "/home/octavi/projects/cam/CMakeLists.txt"
+  "/home/octavi/projects/bird-feeder/CMakeLists.txt"
   "CMakeFiles/3.31.10/CMakeCCompiler.cmake"
   "CMakeFiles/3.31.10/CMakeCXXCompiler.cmake"
   "CMakeFiles/3.31.10/CMakeSystem.cmake"
