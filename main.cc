@@ -6,7 +6,7 @@
 
 int main() {
     // 1. HARDWARE SYNC
-    cv::VideoCapture cap(0, cv::CAP_V4L2); // Force V4L2 driver for better Pi support
+    cv::VideoCapture cap(0); // Force V4L2 driver for better Pi support
     if (!cap.isOpened()) return -1;
 
     // Set resolution to a balanced 720p - high quality but manageable
