@@ -18,13 +18,13 @@ string getTimestampName() {
 }
 
 int main() {
-    VideoCapture cap(0);
+    VideoCapture cap(2);
     if (!cap.isOpened()) return -1;
 
     // PS3 Eye Specific Settings (640x480 @ 60fps is the sweet spot)
     int width = 640;
     int height = 480;
-    int fps = 60; 
+    int fps = 30; 
 
     cap.set(CAP_PROP_FRAME_WIDTH, width);
     cap.set(CAP_PROP_FRAME_HEIGHT, height);
@@ -61,12 +61,12 @@ int main() {
         }
 
         // 3. Logic: Start Recording
-        if (motionCount > 400) { // Adjust sensitivity here
+        if (motionCount > 700) { // Adjust sensitivity here
             framesSinceMotion = 0;
             if (!isRecording) {
                 string filename = getTimestampName();
                 cout << "Motion! Saving to: " << filename << endl;
-                writer.open(filename, VideoWriter::fourcc('X', '2', '6', '4'), fps, frame.size());
+                writer.open(filename, VideoWriter::fourcc('M', 'J', 'P', 'G'), fps, frame.size());
                 
                 while (!frameBuffer.empty()) {
                     writer.write(frameBuffer.front());
